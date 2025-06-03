@@ -3,7 +3,7 @@
 module uart_receiver
     #(
         parameter DATA_BITS = 8,
-        STOP_BIT_TICK = 1 //  número de ticks (oversampling) correspondientes a 1 bit de parada
+        STOP_BIT_TICK = 16 //  número de ticks (oversampling) correspondientes a 1 bit de parada
     )
     (
         input clk_50MHz, // reloj Cyclone IV
