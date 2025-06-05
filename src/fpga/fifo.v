@@ -1,3 +1,4 @@
+
 module fifo
     #(
         parameter DATA_SIZE = 8, // no. bits
