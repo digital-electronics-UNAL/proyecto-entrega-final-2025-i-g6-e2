@@ -5,12 +5,12 @@ module fifo
     )
     (
         input clk, // reloj FPGA 
-        input reset // boton reset
-        input write_to_fifo // signal start writing to FIFO
-        input read_from_fifo // signal start reading from FIFO
-        input [DATA_SIZE-1:0] write_data_in // data byte into FIFO
-        output [DATA_SIZE-1:0] read_data_out // data byte out of FIFO
-        output empty
+        input reset, // boton reset
+        input write_to_fifo, // signal start writing to FIFO
+        input read_from_fifo, // signal start reading from FIFO
+        input [DATA_SIZE-1:0] write_data_in, // data byte into FIFO
+        output [DATA_SIZE-1:0] read_data_out, // data byte out of FIFO
+        output empty,
         output full
 );
     
@@ -73,9 +73,9 @@ module fifo
                         full_buff = 1'b1;
                 end
             // next: la posición que tomaría el puntero si se hace una operación de lectura o escritura.
-            2'b11 begin
+            2'b11: begin
                 current_write_addr_buff = next_write_addr;
-                current_read_addr_buff = next_read_addr
+                current_read_addr_buff = next_read_addr;
             end
 
         endcase
