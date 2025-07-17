@@ -40,7 +40,9 @@ module uart_rx_tb;
         begin
             rx_tb = 1'b0;            #(BIT_PERIOD);   // start bit
             for (i = 0; i < 8; i = i + 1) begin
-                rx_tb = data[i];     #(BIT_PERIOD);   // bits 0…7
+                rx_tb = data[7-i];     #(BIT_PERIOD);   // bits 0…7
+                $display("%d) data=%h bit %1b", i, data, data[7-i]);
+
             end
             rx_tb = 1'b1;            #(BIT_PERIOD);   // stop bit
         end

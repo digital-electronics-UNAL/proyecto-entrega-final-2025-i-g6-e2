@@ -9,7 +9,7 @@ module uart_receiver
     input  rx,
     input  sample_tick,
     output reg data_ready,
-    output [DATA_BITS-1:0] data_out
+    output reg[DATA_BITS-1:0] data_out
   );
 
   localparam [1:0]
@@ -20,7 +20,7 @@ module uart_receiver
 
   reg [1:0] state,   next_state;
   reg [3:0] tick_reg,  tick_next;
-  reg [2:0] nbits_reg, nbits_next;
+  reg [3:0] nbits_reg, nbits_next;
   reg [DATA_BITS-1:0] data_reg, data_next;
 
   always @(posedge clk_50MHz or posedge reset) begin
@@ -29,6 +29,7 @@ module uart_receiver
       tick_reg  <= 0;
       nbits_reg <= 0;
       data_reg  <= 0;
+      data_out  <= 0;
     end else begin
       state     <= next_state;
       tick_reg  <= tick_next;
@@ -67,13 +68,13 @@ module uart_receiver
         if (sample_tick) begin
           // Capturamos el bit en el LSB, desplazando todo a la izquierda
           if (tick_reg == (STOP_BIT_TICK/2 - 1)) begin
-            data_next = { data_reg[DATA_BITS-2:0], rx };
+            data_next = { data_reg[DATA_BITS-1:0], rx };
           end
 
           // Avanzamos el conteo de ticks y de bits
           if (tick_reg == STOP_BIT_TICK-1) begin
             tick_next = 0;
-            if (nbits_reg == (DATA_BITS-1))
+            if (nbits_reg == (DATA_BITS))
               next_state = stop;
             else
               nbits_next = nbits_reg + 1;
@@ -88,6 +89,7 @@ module uart_receiver
             data_ready = 1'b1;
             next_state = idle;
             tick_next  = 0;
+            data_out = data_reg;
           end else begin
             tick_next = tick_reg + 1;
           end
@@ -95,5 +97,5 @@ module uart_receiver
     endcase
   end
 
-  assign data_out = data_reg;
+  // assign data_out = data_reg;
 endmodule
