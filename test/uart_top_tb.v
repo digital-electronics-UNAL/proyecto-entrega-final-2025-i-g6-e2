@@ -1,7 +1,5 @@
 `timescale 1ns/1ps
-`include "src/fpga/uart_top.v"          // DUT
-`include "src/fpga/baud_rate_generator.v"
-`include "src/fpga/uart_receiver/uart_receiver.v"  // receptor-espía
+`include "src/fpga/uart_top.v"
 
 module uart_top_loopback_tb;
 

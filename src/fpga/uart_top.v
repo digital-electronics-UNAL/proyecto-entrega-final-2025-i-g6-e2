@@ -74,5 +74,31 @@ module uart_top #(
         .tx_start    (~fifo_empty),     // arranca cuando hay dato
         .data_in     (fifo_data_out),   // byte leído de la FIFO
         .tx          (tx),
-        .tx_busy     (tx_bus
+        .tx_busy     (tx_busy),
+        .tx_done_tick(tx_done_tick)
+    );
 
+    /* ─────  FIFO compartida ───── */
+    fifo #(
+        .DATA_SIZE      (DATA_BITS),
+        .ADDR_SPACE_EXP (FIFO_EXP)
+    ) FIFO (
+        .clk            (clk_50MHz),
+        .reset          (~reset),
+        .write_to_fifo  (rx_done_tick),          // receptor escribe
+        .read_from_fifo (read_uart | fifo_rd),   // lector externo O transmisor
+        .write_data_in  (rx_data_out),           // byte del receptor
+        .read_data_out  (fifo_data_out),         // byte hacia TX o testbench
+        .empty          (fifo_empty),
+        .full           (fifo_full)
+    );
+
+    /*────────────────────────────────────────────────────
+     *  fifo_rd se activa un ciclo cuando:
+     *     • la FIFO NO está vacía  y
+     *     • el transmisor acaba de quedar libre
+     *  Esto provoca la extracción del siguiente byte.
+     *────────────────────────────────────────────────────*/
+    assign fifo_rd = ~fifo_empty & ~tx_busy;
+
+endmodule
