@@ -37,7 +37,8 @@ module uart_receiver
       data_reg  <= data_next;
     end
   end
-
+  
+  // ----- Lógica de control -------------------------------------
   always @* begin
     next_state = state;
     data_ready = 1'b0;
