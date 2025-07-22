@@ -1,6 +1,6 @@
 module uart_receiver
   #(
-    parameter DATA_BITS   = 8,
+    parameter DATA_BITS    = 8,
     parameter STOP_BIT_TICK = 16
   )
   (
@@ -8,8 +8,8 @@ module uart_receiver
     input  reset,
     input  rx,
     input  sample_tick,
-    output reg data_ready,
-    output reg[DATA_BITS-1:0] data_out
+    output reg                data_ready,
+    output     [DATA_BITS-1:0] data_out    // now a wire, not reg
   );
 
   localparam [1:0]
@@ -23,13 +23,13 @@ module uart_receiver
   reg [3:0] nbits_reg, nbits_next;
   reg [DATA_BITS-1:0] data_reg, data_next;
 
+  // ----- Sequential logic: only data_reg holds the received byte -----
   always @(posedge clk_50MHz or posedge reset) begin
     if (reset) begin
       state     <= idle;
       tick_reg  <= 0;
       nbits_reg <= 0;
       data_reg  <= 0;
-      data_out  <= 0;
     end else begin
       state     <= next_state;
       tick_reg  <= tick_next;
@@ -37,8 +37,8 @@ module uart_receiver
       data_reg  <= data_next;
     end
   end
-  
-  // ----- Lógica de control -------------------------------------
+
+  // ----- Combinational FSM: drive data_ready and data_next only -----
   always @* begin
     next_state = state;
     data_ready = 1'b0;
@@ -59,7 +59,7 @@ module uart_receiver
             next_state = data;
             tick_next  = 0;
             nbits_next = 0;
-            data_next = 0;
+            data_next  = 0;
           end else begin
             tick_next = tick_reg + 1;
           end
@@ -67,12 +67,10 @@ module uart_receiver
 
       data:
         if (sample_tick) begin
-          // Capturamos el bit en el LSB, desplazando todo a la izquierda
           if (tick_reg == (STOP_BIT_TICK/2 - 1)) begin
-            data_next = { data_reg[DATA_BITS-1:0], rx };
+            data_next = { data_reg[DATA_BITS-2:0], rx }; // shift left
           end
 
-          // Avanzamos el conteo de ticks y de bits
           if (tick_reg == STOP_BIT_TICK-1) begin
             tick_next = 0;
             if (nbits_reg == (DATA_BITS))
@@ -90,7 +88,7 @@ module uart_receiver
             data_ready = 1'b1;
             next_state = idle;
             tick_next  = 0;
-            data_out = data_reg;
+            // NO direct assignment to data_out here
           end else begin
             tick_next = tick_reg + 1;
           end
@@ -98,5 +96,7 @@ module uart_receiver
     endcase
   end
 
-  // assign data_out = data_reg;
+  // ----- Single driver for data_out -----
+  assign data_out = data_reg;
+
 endmodule

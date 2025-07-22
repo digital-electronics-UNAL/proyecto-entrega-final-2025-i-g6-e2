@@ -95,8 +95,8 @@ module uart_top_loopback_tb;
         #200 reset_tb = 1;
         #(5*BIT_PERIOD);
 
-        send_uart_byte(8'h41);  #(5*BIT_PERIOD);   // 'A'
-        send_uart_byte(8'h42);  #(5*BIT_PERIOD);   // 'B'
+        send_uart_byte(8'b11110000);  #(5*BIT_PERIOD);   // 'A'
+        send_uart_byte(8'h01010101);  #(5*BIT_PERIOD);   // 'B'
         send_uart_byte(8'h43);                    // 'C'
 
         // Esperamos a que el espía reciba los 3 bytes

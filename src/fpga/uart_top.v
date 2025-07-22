@@ -1,7 +1,7 @@
-`include "src/fpga/baud_rate_generator.v"
-`include "src/fpga/fifo.v"
-`include "src/fpga/uart_receiver/uart_receiver.v"
-`include "src/fpga/uart_transmitter/uart_transmitter.v"
+// `include "src/fpga/baud_rate_generator.v"
+// `include "src/fpga/fifo.v"
+// `include "src/fpga/uart_receiver/uart_receiver.v"
+// `include "src/fpga/uart_transmitter/uart_transmitter.v"
 
 /*
  *  ────────────────────────────────────────────────────────────────
@@ -26,7 +26,7 @@ module uart_top #(
     input  read_uart,              // lectura manual del FIFO
     output fifo_full,
     output fifo_empty,
-    output [DATA_BITS-1:0] fifo_data_out  // byte disponible para test/lectura
+    output [DATA_BITS-1:0] fifo_data_out,  // byte disponible para test/lectura,
 );
 
     /*──────────────────────────
@@ -37,7 +37,6 @@ module uart_top #(
     wire [DATA_BITS-1:0] rx_data_out;   // byte desde el receptor
 
     wire tx_busy, tx_done_tick;         // flags del transmisor
-    wire fifo_rd;                       // pulso de lectura interno (TX)
     /*──────────────────────────*/
 
     /* ─────  Baud-rate generator (común a RX y TX) ───── */
@@ -49,7 +48,6 @@ module uart_top #(
         .reset     (~reset),            // reset activo-alto interno
         .tick      (tick)
     );
-
     /* ─────  UART Receiver ───── */
     uart_receiver #(
         .DATA_BITS     (DATA_BITS),
@@ -72,7 +70,7 @@ module uart_top #(
         .reset       (~reset),
         .sample_tick (tick),
         .tx_start    (~fifo_empty),     // arranca cuando hay dato
-        .data_in     (fifo_data_out),   // byte leído de la FIFO
+        .data_in     (fifo_data_out),
         .tx          (tx),
         .tx_busy     (tx_busy),
         .tx_done_tick(tx_done_tick)
@@ -85,20 +83,12 @@ module uart_top #(
     ) FIFO (
         .clk            (clk_50MHz),
         .reset          (~reset),
-        .write_to_fifo  (rx_done_tick),          // receptor escribe
-        .read_from_fifo (read_uart | fifo_rd),   // lector externo O transmisor
-        .write_data_in  (rx_data_out),           // byte del receptor
-        .read_data_out  (fifo_data_out),         // byte hacia TX o testbench
+        .write_to_fifo  (rx_done_tick),            // receptor escribe
+        .read_from_fifo (read_uart | tx_done_tick),// lector externo O TX
+        .write_data_in  (rx_data_out),             // byte del receptor
+        .read_data_out  (fifo_data_out),           // byte hacia TX o testbench
         .empty          (fifo_empty),
         .full           (fifo_full)
     );
-
-    /*────────────────────────────────────────────────────
-     *  fifo_rd se activa un ciclo cuando:
-     *     • la FIFO NO está vacía  y
-     *     • el transmisor acaba de quedar libre
-     *  Esto provoca la extracción del siguiente byte.
-     *────────────────────────────────────────────────────*/
-    assign fifo_rd = ~fifo_empty & ~tx_busy;
 
 endmodule
