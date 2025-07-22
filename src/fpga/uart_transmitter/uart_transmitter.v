@@ -1,115 +1,136 @@
+/*
+ *  ────────────────────────────────────────────────────────────────
+ *  UART Transmitter 8 N 1 con sobre-muestreo ×16
+ *  • tx_start carga ‘data_in’ en el shift‐register
+ *  • Emite 1 start, DATA_BITS datos (LSB first) y 1 stop
+ *  • tx_busy alto mientras transmite, tx_done_tick un pulso al acabar
+ *  ────────────────────────────────────────────────────────────────
+ */
 module uart_transmitter
   #(
-    parameter DATA_BITS = 8,
-    parameter STOP_BIT_TICK = 16   // =16 → 1 bit de parada
+    parameter DATA_BITS     = 8,
+    parameter STOP_BIT_TICK = 16    // tics de muestreo por bit
   )
   (
-    input  clk_50MHz,
-    input  reset,
-    input  sample_tick,
-    input  tx_start,               // pulso ‘1’ para iniciar envío
-    input  [DATA_BITS-1:0] data_in,
-    output reg tx = 1'b1,   // línea serial
-    output reg tx_busy = 1'b0,
-    output reg tx_done_tick = 1'b0    // pulso ‘1’ al terminar
+    input  wire                   clk_50MHz,
+    input  wire                   reset,       // activo-alto
+    input  wire                   sample_tick, // f_baud×16
+    input  wire                   tx_start,    // pulso de inicio
+    input  wire [DATA_BITS-1:0]   data_in,     // byte a transmitir
+    output wire                   tx,          // línea serial
+    output wire                   tx_busy,
+    output wire                   tx_done_tick
   );
 
-  // ----- Estados ------------------------------------------------
+  // ─── Estados FSM ──────────────────────────────
   localparam [1:0]
-    idle  = 2'b00,
-    start = 2'b01,
-    data  = 2'b10,
-    stop  = 2'b11;
+    S_IDLE  = 2'b00,
+    S_START = 2'b01,
+    S_DATA  = 2'b10,
+    S_STOP  = 2'b11;
 
-  reg [1:0] state, next_state;
-  reg [3:0] tick_reg, tick_next;
-  reg [3:0] nbits_reg, nbits_next;
-  reg [DATA_BITS-1:0] shreg, shreg_next;
+  // ─── Registros de estado y conteo ─────────────
+  reg [1:0]                state,       next_state;
+  reg [3:0]                tick_cnt,    next_tick;
+  reg [3:0]                bit_cnt,     next_bit;
+  reg [DATA_BITS-1:0]      shreg,       next_shreg;
 
-  // ----- FFs síncronos -----------------------------------------
+  // ─── Señales de salida registradas ───────────
+  reg                      tx_r,        next_tx;
+  reg                      busy_r,      next_busy;
+  reg                      done_r,      next_done;
+
+  // ─── Salidas combinacionales ──────────────────
+  assign tx          = tx_r;
+  assign tx_busy     = busy_r;
+  assign tx_done_tick= done_r;
+
+  // ─── Flip‐flops síncronos ─────────────────────
   always @(posedge clk_50MHz or posedge reset) begin
     if (reset) begin
-      state <= idle;
-      tick_reg <= 0;
-      nbits_reg <= 0;
-      shreg <= 0;
-      tx <= 1'b1;
-      tx_busy <= 1'b0;
+      state    <= S_IDLE;
+      tick_cnt <= 0;
+      bit_cnt  <= 0;
+      shreg    <= {DATA_BITS{1'b1}};  // línea idle = 1
+      tx_r     <= 1'b1;
+      busy_r   <= 1'b0;
+      done_r   <= 1'b0;
     end else begin
-      state <= next_state;
-      tick_reg <= tick_next;
-      nbits_reg <= nbits_next;
-      shreg <= shreg_next;
+      state    <= next_state;
+      tick_cnt <= next_tick;
+      bit_cnt  <= next_bit;
+      shreg    <= next_shreg;
+      tx_r     <= next_tx;
+      busy_r   <= next_busy;
+      done_r   <= next_done;
     end
   end
 
-  // ----- Lógica de control -------------------------------------
+  // ─── Lógica combinacional de la FSM ──────────
   always @* begin
     // valores por defecto
     next_state = state;
-    tick_next = tick_reg;
-    nbits_next = nbits_reg;
-    shreg_next = shreg;
-    tx_done_tick = 1'b0;
+    next_tick  = tick_cnt;
+    next_bit   = bit_cnt;
+    next_shreg = shreg;
+    next_tx    = tx_r;
+    next_busy  = busy_r;
+    next_done  = 1'b0;              // pulso de un tic
 
     case (state)
-      // ---------------- IDLE  ----------------
-      idle: begin
-        tx = 1'b1;
-        tx_busy = 1'b0;
+      S_IDLE: begin
+        next_tx   = 1'b1;
+        next_busy = 1'b0;
         if (tx_start) begin
-          next_state = start;
-          shreg_next = data_in; // **
-          tick_next  = 0;
-          tx_busy    = 1'b1;
+          next_state  = S_START;
+          next_shreg  = data_in;     // cargar byte
+          next_tick   = 0;
+          next_busy   = 1'b1;
         end
       end
 
-      // ---------------- START ----------------
-      start: begin
-        tx      = 1'b0;         // bit de inicio
-        tx_busy = 1'b1;
+      S_START: begin
+        next_tx   = 1'b0;            // start bit
+        next_busy = 1'b1;
         if (sample_tick) begin
-          if (tick_reg == STOP_BIT_TICK-1) begin
-            tick_next  = 0;
-            nbits_next = 0;
-            next_state = data;
-          end else begin
-            tick_next = tick_reg + 1;
-          end
+          if (tick_cnt == STOP_BIT_TICK-1) begin
+            next_state = S_DATA;
+            next_tick  = 0;
+            next_bit   = 0;
+          end else
+            next_tick = tick_cnt + 1;
         end
       end
 
-      // ---------------- DATA -----------------
-      data: begin
-        tx      = shreg[0];     // LSB first
-        tx_busy = 1'b1;
+      S_DATA: begin
+        next_tx   = shreg[0];        // LSB first
+        next_busy = 1'b1;
         if (sample_tick) begin
-          if (tick_reg == STOP_BIT_TICK-1) begin
-            tick_next  = 0;
-            shreg_next = {1'b1, shreg[DATA_BITS-1:1]}; // shift right
-            if (nbits_reg == DATA_BITS-1)
-              next_state = stop;
+          if (tick_cnt == STOP_BIT_TICK-1) begin
+            next_tick   = 0;
+            next_shreg  = {1'b1, shreg[DATA_BITS-1:1]}; // shift right
+            if (bit_cnt == DATA_BITS-1)
+              next_state = S_STOP;
             else
-              nbits_next = nbits_reg + 1;
+              next_bit = bit_cnt + 1;
           end else
-            tick_next = tick_reg + 1;
+            next_tick = tick_cnt + 1;
         end
       end
 
-      // ---------------- STOP -----------------
-      stop: begin
-        tx      = 1'b1;
-        tx_busy = 1'b1;
+      S_STOP: begin
+        next_tx   = 1'b1;            // stop bit
+        next_busy = 1'b1;
         if (sample_tick) begin
-          if (tick_reg == STOP_BIT_TICK-1) begin
-            next_state   = idle;
-            tick_next    = 0;
-            tx_done_tick = 1'b1;
+          if (tick_cnt == STOP_BIT_TICK-1) begin
+            next_state = S_IDLE;
+            next_tick  = 0;
+            next_done  = 1'b1;      // pulso de fin de trama
           end else
-            tick_next = tick_reg + 1;
+            next_tick = tick_cnt + 1;
         end
       end
     endcase
   end
+
 endmodule
