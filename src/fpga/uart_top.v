@@ -13,9 +13,9 @@ module uart_top #(
     parameter FIFO_EXP      = 4     // direcciones FIFO
 )(
     input  wire               clk_50MHz,
-    input  wire               reset,       // activo-bajo
-    input  wire               rx,          // línea serie entrante
-    output wire               tx,          // línea serie saliente (eco)
+    input  wire               reset,    // activo-bajo
+    input  wire               rx,       // línea serie entrante
+    output wire               tx,       // línea serie saliente (eco)
 
     // LCD1602 interface
     output wire               rs,
@@ -29,13 +29,15 @@ module uart_top #(
 );
 
     // ---------------------- señales internas ----------------------
-    wire tick;                        // 16× baud
-    wire rx_done_tick;                // byte recibido
-    wire [DATA_BITS-1:0] rx_data_out; // dato del receptor UART
+    wire tick;                          // 16× baud
+    wire rx_done_tick;                  // byte recibido
+    wire [DATA_BITS-1:0] rx_data_out;   // dato del receptor UART
 
     wire [DATA_BITS-1:0] fifo_data_out; // dato extraído del FIFO
-    wire tx_busy;
-    wire tx_done_tick;
+    wire tx_busy, tx_done_tick;
+
+    // se usa para arrancar la lectura y transmisión: eco única vez
+    wire tx_start = (~fifo_empty) && (~tx_busy);
 
     // -------------------- Baud-rate generator --------------------
     baud_rate_generator #(
@@ -67,8 +69,8 @@ module uart_top #(
     ) FIFO_INST (
         .clk            (clk_50MHz),
         .reset          (~reset),
-        .write_to_fifo  (rx_done_tick),       // escritura al recibir byte
-        .read_from_fifo (tx_done_tick),       // lectura al finalizar TX (eco)
+        .write_to_fifo  (rx_done_tick),  // receptor escribe
+        .read_from_fifo (tx_start),      // lectura en el inicio de TX (eco)
         .write_data_in  (rx_data_out),
         .read_data_out  (fifo_data_out),
         .empty          (fifo_empty),
@@ -83,7 +85,7 @@ module uart_top #(
         .clk_50MHz    (clk_50MHz),
         .reset        (~reset),
         .sample_tick  (tick),
-        .tx_start     (~fifo_empty),     // arranca si hay dato en FIFO
+        .tx_start     (tx_start),        // arranca eco una vez
         .data_in      (fifo_data_out),
         .tx           (tx),
         .tx_busy      (tx_busy),

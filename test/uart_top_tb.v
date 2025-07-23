@@ -81,9 +81,9 @@ module uart_top_tb;
 
         // Send "1", "2", "3"
         uart_send_byte(8'h31);
-        #500_000;
+        #2_000_000;
         uart_send_byte(8'h32);
-        #500_000;
+        #2_000_000;
         uart_send_byte(8'h33);
 
         // Wait for LCD update and TX echoes
