@@ -80,7 +80,7 @@ module uart_receiver #(
                     // Muestra en el centro del bit (tick 8)
                     if (tick_reg == (STOP_BIT_TICK/2 - 1)) begin
                         // LSB-first ⇒ desplazamos a la derecha
-                        data_next = { data_reg[DATA_BITS-2:0], rx };
+                        data_next = { rx, data_reg[DATA_BITS-1:1] };
                     end
 
                     if (tick_reg == STOP_BIT_TICK-1) begin

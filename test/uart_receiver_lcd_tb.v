@@ -25,15 +25,12 @@ module uart_lcd_tb;
     wire [7:0] data_lcd;
     wire rs, rw, enable;
 
-    // read_uart no se usa → atado a 0
-    wire read_uart = 1'b0;
-
     // UART RX línea (idle = 1)
     reg rx = 1'b1;
 
     // Instancia del DUT
     uart_lcd DUT (
-        .clk_50MHz(clk_50MHz), .reset(reset_n), .rx(rx), .read_uart(read_uart),
+        .clk_50MHz(clk_50MHz), .reset(reset_n), .rx(rx),
         .rs(rs), .rw(rw), .enable(enable),
         .fifo_full(fifo_full), .fifo_empty(fifo_empty), .data_lcd(data_lcd)
     );
@@ -50,7 +47,7 @@ module uart_lcd_tb;
             rx = 1'b0; #(BAUD_PERIOD);
             // 8 data bits, LSB first
             for (i = 0; i < 8; i = i + 1) begin
-                rx = data[7-i]; #(BAUD_PERIOD);
+                rx = data[i]; #(BAUD_PERIOD);
             end
             // stop bit (1)
             rx = 1'b1; #(BAUD_PERIOD);
