@@ -1,115 +1,102 @@
 `timescale 1ns/1ps
+
+// Testbench for uart_lcd_tx
+// Sends ASCII "1", "2", "3" over RX, monitors LCD and TX echo
+
 `include "src/fpga/uart_top.v"
+`include "src/fpga/baud_rate_generator.v"
+`include "src/fpga/fifo.v"
+`include "src/fpga/uart_receiver/uart_receiver.v"
+`include "src/fpga/uart_transmitter/uart_transmitter.v"
+`include "src/fpga/lcd/lcd1602.v"
 
-module uart_top_loopback_tb;
+module uart_top_tb;
+    // Clock & reset
+    reg clk_50MHz = 0;
+    always #10 clk_50MHz = ~clk_50MHz;  // 50 MHz
 
-    /*--------------------------------------------------------------
-     * 1.  Señales de estímulo / monitor
-     *------------------------------------------------------------*/
-    reg  clk_50MHz_tb = 0;
-    reg  reset_tb     = 0;          // 0 = reset interno activo
-    reg  rx_tb        = 1;          // sensor → FPGA
-    wire tx_tb;                     // FPGA  → ESP32 (salida)
+    reg reset_n = 0;  // active-low reset
+    initial begin
+        reset_n = 0;
+        #200;
+        reset_n = 1;
+    end
 
-    /*--------------------------------------------------------------
-     * 2.  Instancia del diseño bajo prueba
-     *------------------------------------------------------------*/
+    // UART RX line (idle = 1)
+    reg rx = 1'b1;
+
+    // DUT signals
+    wire tx;
+    wire rs, rw, enable;
+    wire [7:0] data_lcd;
+    wire fifo_full, fifo_empty;
+
+    // Instantiate DUT
     uart_top #(
-        .DATA_BITS    (8),
-        .STOP_BIT_TICK(16),
-        .BR_LIMIT     (326),        // 50 MHz / (9600×16)
-        .BR_BITS      (9),
-        .FIFO_EXP     (4)
-    ) uut (
-        .clk_50MHz (clk_50MHz_tb),
-        .reset     (reset_tb),
-        .rx        (rx_tb),
-        .tx        (tx_tb),
-        .read_uart (1'b0),          // no lectura manual
-        .fifo_full (), .fifo_empty (),
-        .fifo_data_out ()           // no se usa en esta prueba
+        .DATA_BITS     (8),
+        .STOP_BIT_TICK (16),
+        .BR_LIMIT      (326),
+        .BR_BITS       (9),
+        .FIFO_EXP      (4)
+    ) DUT (
+        .clk_50MHz(clk_50MHz),
+        .reset    (reset_n),
+        .rx       (rx),
+        .tx       (tx),
+        .rs       (rs),
+        .rw       (rw),
+        .enable   (enable),
+        .data_lcd (data_lcd),
+        .fifo_full (fifo_full),
+        .fifo_empty(fifo_empty)
     );
 
-    /*--------------------------------------------------------------
-     * 3.  Reloj de 50 MHz
-     *------------------------------------------------------------*/
-    always #10 clk_50MHz_tb = ~clk_50MHz_tb;
+    // Baud period for 9600 baud: ~104166 ns
+    localparam integer BAUD_PERIOD = 104166;
 
-    /*--------------------------------------------------------------
-     * 4.  Receptor “espía” para decodificar la línea TX
-     *------------------------------------------------------------*/
-    wire sample_tick_tb;
-    baud_rate_generator #(
-        .N(9), .M(326)
-    ) BRG_MON (
-        .clk_50MHz (clk_50MHz_tb),
-        .reset     (reset_tb),
-        .tick      (sample_tick_tb)
-    );
-
-    wire        spy_ready;
-    wire [7:0]  spy_byte;
-
-    uart_receiver #(
-        .DATA_BITS(8), .STOP_BIT_TICK(16)
-    ) RX_SPY (
-        .clk_50MHz   (clk_50MHz_tb),
-        .reset       (reset_tb),
-        .rx          (tx_tb),           // escucha TX del DUT
-        .sample_tick (sample_tick_tb),
-        .data_ready  (spy_ready),
-        .data_out    (spy_byte)
-    );
-
-    /*--------------------------------------------------------------
-     * 5.  Tarea para enviar un byte UART  (MSB→LSB)
-     *------------------------------------------------------------*/
-    localparam integer BIT_PERIOD = 104_167;   // ns @9600 bps
-
-    task send_uart_byte(input [7:0] data);
+    // Task: send one byte via UART 8N1 LSB-first
+    task uart_send_byte(input [7:0] data);
         integer i;
         begin
-            rx_tb = 1'b0;                #(BIT_PERIOD);            // start
+            // Start bit
+            rx = 1'b0;
+            #(BAUD_PERIOD);
+            // Data bits LSB first
             for (i = 0; i < 8; i = i + 1) begin
-                rx_tb = data[7-i];       #(BIT_PERIOD);            // b7…b0
+                rx = data[i];
+                #(BAUD_PERIOD);
             end
-            rx_tb = 1'b1;                #(BIT_PERIOD);            // stop
+            // Stop bit
+            rx = 1'b1;
+            #(BAUD_PERIOD);
         end
     endtask
 
-    /*--------------------------------------------------------------
-     * 6.  Proceso de log del receptor-espía
-     *------------------------------------------------------------*/
-    integer n = 0;
-    always @(posedge clk_50MHz_tb)
-        if (spy_ready) begin
-            $display("%0t ns  →  byte%0d = 0x%02h", $time, n, spy_byte);
-            n = n + 1;
-        end
-
-    /*--------------------------------------------------------------
-     * 7.  Secuencia de estímulos
-     *------------------------------------------------------------*/
+    // Stimulus
     initial begin
-        // liberar reset tras 200 ns
-        #200 reset_tb = 1;
-        #(5*BIT_PERIOD);
+        // Wait for reset deassertion
+        @(posedge reset_n);
+        // Give some margin
+        #500_000;
 
-        send_uart_byte(8'b11110000);  #(5*BIT_PERIOD);   // 'A'
-        send_uart_byte(8'h01010101);  #(5*BIT_PERIOD);   // 'B'
-        send_uart_byte(8'h43);                    // 'C'
+        // Send "1", "2", "3"
+        uart_send_byte(8'h31);
+        #500_000;
+        uart_send_byte(8'h32);
+        #500_000;
+        uart_send_byte(8'h33);
 
-        // Esperamos a que el espía reciba los 3 bytes
-        wait (n == 3);
-        #1_000;            // pequeño margen
+        // Wait for LCD update and TX echoes
+        #200_000_000;
+
+        $display("--- Simulation complete ---");
         $finish;
     end
 
-    /*--------------------------------------------------------------
-     * 8.  Dump comprimido (FST)
-     *------------------------------------------------------------*/
+    // VCD dump
     initial begin
-        $dumpfile("uart_top.vcd");
-        $dumpvars(-1, uut);
+        $dumpfile("uart_top_tb.vcd");
+        $dumpvars(0, uart_top_tb);
     end
+
 endmodule
