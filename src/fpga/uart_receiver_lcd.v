@@ -16,13 +16,12 @@ module uart_lcd #(
     input  clk_50MHz,
     input  reset,                // activo‑bajo, se conserva igual que el diseño original
     input  rx,                   // línea serie
-    input  read_uart,            // ya no se usa, pero se conserva el puerto
-    input  rs,
-    input  rw,
-    input  enable,
+    output rs,
+    output rw,             // (opcional: amárralo a 0)
+    output enable,
+    output [DATA_BITS-1:0] data_lcd,
     output fifo_full,
-    output fifo_empty,
-    output [DATA_BITS-1:0] data_lcd
+    output fifo_empty
 );
     wire tick;                          // 16× baud
     wire rx_done_tick;                  // byte recibido
@@ -88,7 +87,7 @@ module uart_lcd #(
         if (!reset) begin
             latitud_reg <= {DATA_BITS{1'b0}};
         end else if (rd_delay) begin
-            latitud_reg <= fifo_data_out;
+            latitud_reg <= rx_data_out;
         end
     end
 

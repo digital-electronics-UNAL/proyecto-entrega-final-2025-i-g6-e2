@@ -68,12 +68,12 @@ module uart_lcd_tb;
         // Enviamos 3 bytes ASCII: "1", "2", "3"
         uart_send_byte(8'h31);
         #500_000;
-        uart_send_byte("2");
+        uart_send_byte(8'h32);
         #500_000;
-        uart_send_byte("3");
+        uart_send_byte(8'h33);
 
         // Pausa para que la LCD procese
-        #20_000_000;  // 20 ms
+        #200_000_000;  // 200 ms
 
         $display("TEST finished - revisa data_lcd en el waveform");
         $finish;
