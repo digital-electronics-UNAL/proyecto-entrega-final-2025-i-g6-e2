@@ -14,7 +14,7 @@ module baud_rate_generator
     reg [N-1:0] counter;
     wire [N-1:0] next; // siguiente valor de counter
 
-    always @(posedge clk_50MHz, posedge reset)
+    always @(posedge clk_50MHz)
         if(reset)
             counter <= 0;
         else

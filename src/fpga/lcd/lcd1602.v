@@ -15,7 +15,7 @@ module LCD1602_controller #(parameter NUM_COMMANDS = 4,
 
 // Definir los estados de la FSM
 localparam IDLE = 3'b000; //arranca en idle, el estado se encarga de leer la memoria de 4 filas que se lleno y las manda por data
-localparam CONFIG_CMD1 = 3'b001; // se encarga de recorrer la memoria y sacarlos por data (cgram ayuda a leer caracteres especiales), se queda 4 ciclos de relog
+localparam CONFIG_CMD1 = 3'b001; // se encarga de recorrer } memoria y sacarlos por data (cgram ayuda a leer caracteres especiales), se queda 4 ciclos de relog
 localparam WR_STATIC_TEXT_1L = 3'b010; //1L primera linea, se queda 16 ciclos de relog
 localparam CONFIG_CMD2 = 3'b011; // se queda 1 ciclo de relog
 localparam WR_STATIC_TEXT_2L = 3'b100; //16 ciclos de relog y se devuelve 
@@ -147,13 +147,13 @@ always @(posedge clk_16ms) begin // este bloque define cuando se salta a idle co
                     end
                     2'b01: begin
 						rs <= 1'b1;
-						data <= (latitud - latitud%100)/100 + 8'h30;
+						data <= (latitud + 8'h30);
                         flag_substate <= 2'b10;
                     end
                     2'b10: begin
 						rs <= 1'b1;
-                        data <= (latitud%100 - latitud%10)/10 + 8'h30;
-                        flag_substate <= 2'b11;
+                        data <= (latitud+ 8'h30);
+                        flag_substate <= 2'b00;
                     end
                     2'b11:begin
                         rs <= 1'b1;

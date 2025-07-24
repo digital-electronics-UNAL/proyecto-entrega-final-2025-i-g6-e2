@@ -28,7 +28,7 @@ module uart_receiver #(
     reg [DATA_BITS-1:0] data_reg, data_next;
 
     // --------------- secuencial --------------------
-    always @(posedge clk_50MHz or posedge reset) begin
+    always @(posedge clk_50MHz) begin
         if (reset) begin
             state     <= idle;
             tick_reg  <= 0;

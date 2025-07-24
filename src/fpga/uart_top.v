@@ -18,7 +18,10 @@ module uart_top #(
 
     // FIFO status
     output wire               fifo_full,
-    output wire               fifo_empty
+    output wire               fifo_empty,
+
+    
+    output wire [DATA_BITS-1:0] lat_deg_out
 );
 
     // ---------------------- señales internas ----------------------
@@ -56,16 +59,16 @@ module uart_top #(
     );
 
     // ------------------------- FIFO -------------------------------
-    fifo #(
-        .DATA_SIZE      (DATA_BITS),
-        .ADDR_SPACE_EXP (FIFO_EXP)
+    sync_fifo #(
+        .DWIDTH      (DATA_BITS),
+        .DEPTH       (FIFO_EXP)
     ) FIFO_INST (
         .clk            (clk_50MHz),
-        .reset          (~reset),
-        .write_to_fifo  (rx_done_tick),  // receptor escribe
-        .read_from_fifo (tx_start),      // lectura en el inicio de TX (eco)
-        .write_data_in  (rx_data_out),
-        .read_data_out  (fifo_data_out),
+        .rstn           (reset),
+        .wr_en          (rx_done_tick),  // receptor escribe
+        .rd_en          (tx_start),      // lectura en el inicio de TX (eco)
+        .din            (rx_data_out),
+        .dout           (fifo_data_out),
         .empty          (fifo_empty),
         .full           (fifo_full)
     );
@@ -78,13 +81,16 @@ module uart_top #(
         .clk(clk_50MHz),
         .rst(reset),
         .rx_data(fifo_data_out),  // Conectar fifo_data_out a rx_data del parser
-        .rx_valid(tx_start),      // Solo envía datos válidos
+        .rx_valid(~fifo_empty),      // Solo envía datos válidos
         .lat_deg(lat_deg),
         .lat_min(lat_min),
         .lon_deg(lon_deg),
         .lon_min(lon_min),
+        .state_o(),
         .valid_fix(valid_fix)
     );
+
+    assign lat_deg_out = fifo_data_out;
 
     // ---------------------- UART Transmitter ---------------------
     uart_transmitter #(
@@ -120,7 +126,7 @@ module uart_top #(
         .COUNT_MAX         (800000)
     ) lcd_inst (
         .clk     (clk_50MHz),
-        .latitud (lat_deg),
+        .latitud (fifo_data_out),
         .reset   (reset),
         .ready_i (1'b1),
         .rs      (rs),
