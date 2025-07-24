@@ -1,10 +1,3 @@
-// -----------------------------------------------------------------------------
-// UART → FIFO → LCD1602 + UART TX (echo)
-//   • Receptor UART → display LCD
-//   • Receptor UART → FIFO → Transmisor UART (eco)
-//   • Se muestra directamente 'latitud' en ASCII en la LCD
-// -----------------------------------------------------------------------------
-
 module uart_top #(
     parameter DATA_BITS     = 8,
     parameter STOP_BIT_TICK = 16,   // nº pulsos de muestreo por bit
@@ -77,6 +70,22 @@ module uart_top #(
         .full           (fifo_full)
     );
 
+    // ---------------------- NMEA Parser --------------------------
+    wire [7:0] lat_deg, lat_min, lon_deg, lon_min;
+    wire valid_fix;
+
+    nmea_parser PARSER (
+        .clk(clk_50MHz),
+        .rst(~reset),
+        .rx_data(fifo_data_out),  // Conectar fifo_data_out a rx_data del parser
+        .rx_valid(tx_start),      // Solo envía datos válidos
+        .lat_deg(lat_deg),
+        .lat_min(lat_min),
+        .lon_deg(lon_deg),
+        .lon_min(lon_min),
+        .valid_fix(valid_fix)
+    );
+
     // ---------------------- UART Transmitter ---------------------
     uart_transmitter #(
         .DATA_BITS     (DATA_BITS),
@@ -111,7 +120,7 @@ module uart_top #(
         .COUNT_MAX         (800000)
     ) lcd_inst (
         .clk     (clk_50MHz),
-        .latitud (latitud_reg),
+        .latitud (lat_deg),
         .reset   (reset),
         .ready_i (1'b1),
         .rs      (rs),

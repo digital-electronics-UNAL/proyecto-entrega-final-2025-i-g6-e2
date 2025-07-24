@@ -1,7 +1,8 @@
 `timescale 1ns/1ps
 
 // Testbench for uart_lcd_tx
-// Sends ASCII "1", "2", "3" over RX, monitors LCD and TX echo
+// Sends ASCII "$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47\r\n," over RX,
+// monitors LCD and TX echo
 
 `include "src/fpga/uart_top.v"
 `include "src/fpga/baud_rate_generator.v"
@@ -9,6 +10,7 @@
 `include "src/fpga/uart_receiver/uart_receiver.v"
 `include "src/fpga/uart_transmitter/uart_transmitter.v"
 `include "src/fpga/lcd/lcd1602.v"
+`include "src/fpga/parser/nmea_parser.v"
 
 module uart_top_tb;
     // Clock & reset
@@ -79,12 +81,8 @@ module uart_top_tb;
         // Give some margin
         #500_000;
 
-        // Send "1", "2", "3"
-        uart_send_byte(8'h31);
-        #2_000_000;
-        uart_send_byte(8'h32);
-        #2_000_000;
-        uart_send_byte(8'h33);
+        // Send "$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47\r\n"
+        uart_send_string;
 
         // Wait for LCD update and TX echoes
         #200_000_000;
@@ -92,6 +90,79 @@ module uart_top_tb;
         $display("--- Simulation complete ---");
         $finish;
     end
+
+    // Task to send the entire string byte by byte
+    task uart_send_string;
+        begin
+            uart_send_byte("$");
+            uart_send_byte("G");
+            uart_send_byte("P");
+            uart_send_byte("G");
+            uart_send_byte("G");
+            uart_send_byte("A");
+            uart_send_byte(",");
+            uart_send_byte("1");
+            uart_send_byte("2");
+            uart_send_byte("3");
+            uart_send_byte("5");
+            uart_send_byte("1");
+            uart_send_byte("9");
+            uart_send_byte(",");
+            uart_send_byte("4");
+            uart_send_byte("8");
+            uart_send_byte("0");
+            uart_send_byte("7");
+            uart_send_byte(".");
+            uart_send_byte("0");
+            uart_send_byte("3");
+            uart_send_byte("8");
+            uart_send_byte(",");
+            uart_send_byte("N");
+            uart_send_byte(",");
+            uart_send_byte("0");
+            uart_send_byte("1");
+            uart_send_byte("1");
+            uart_send_byte("3");
+            uart_send_byte("1");
+            uart_send_byte(".");
+            uart_send_byte("0");
+            uart_send_byte("0");
+            uart_send_byte("0");
+            uart_send_byte(",");
+            uart_send_byte("E");
+            uart_send_byte(",");
+            uart_send_byte("1");
+            uart_send_byte(",");
+            uart_send_byte("0");
+            uart_send_byte("8");
+            uart_send_byte(",");
+            uart_send_byte("0");
+            uart_send_byte(".");
+            uart_send_byte("9");
+            uart_send_byte(",");
+            uart_send_byte("5");
+            uart_send_byte("4");
+            uart_send_byte("5");
+            uart_send_byte(".");
+            uart_send_byte("4");
+            uart_send_byte(",");
+            uart_send_byte("M");
+            uart_send_byte(",");
+            uart_send_byte("4");
+            uart_send_byte("6");
+            uart_send_byte(".");
+            uart_send_byte("9");
+            uart_send_byte(",");
+            uart_send_byte("M");
+            uart_send_byte(",");
+            uart_send_byte(",");
+            uart_send_byte("*");
+            uart_send_byte("4");
+            uart_send_byte("7");
+            uart_send_byte("\r");
+            uart_send_byte("\n");
+        end
+    endtask
 
     // VCD dump
     initial begin
