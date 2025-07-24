@@ -76,7 +76,7 @@ module uart_top #(
 
     nmea_parser PARSER (
         .clk(clk_50MHz),
-        .rst(~reset),
+        .rst(reset),
         .rx_data(fifo_data_out),  // Conectar fifo_data_out a rx_data del parser
         .rx_valid(tx_start),      // Solo envía datos válidos
         .lat_deg(lat_deg),
