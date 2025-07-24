@@ -2,7 +2,7 @@
 module fifo
     #(
         parameter DATA_SIZE = 8, // no. bits
-        ADDR_SPACE_EXP = 4 // 2^4 = 16 address
+        ADDR_SPACE_EXP = 7 // 2^7 = 16 address
     )
     (
         input clk, // reloj FPGA 
@@ -21,7 +21,7 @@ module fifo
     reg fifo_full, fifo_empty, full_buff, empty_buff;
     wire write_enabled;
 
-    always @(posedge clk)
+    always @(*)
         if(write_enabled) // se omite begin/end
             memory[current_write_addr] <= write_data_in;
 
