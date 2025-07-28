@@ -1,98 +1,152 @@
+`timescale 1ns/1ps
+
 module uart_top #(
     parameter DATA_BITS     = 8,
-    parameter STOP_BIT_TICK = 16,   // nº pulsos de muestreo por bit
-    parameter BR_LIMIT      = 326,
-    parameter BR_BITS       = 9,    // 512 > 326
-    parameter FIFO_EXP      = 4     // direcciones FIFO
+    parameter STOP_BIT_TICK = 16,   // muestras por bit (×16 oversampling)
+    parameter BR_LIMIT      = 326,  // 50 MHz/(16·9600) ≈ 326
+    parameter BR_BITS       = 9,    // 2^9=512 > 326
+    parameter FIFO_DEPTH    = 16    // profundidad de FIFO
 )(
-    input  wire               clk_50MHz,
-    input  wire               reset,    // activo-bajo
-    input  wire               rx,       // línea serie entrante
-    output wire               tx,       // línea serie saliente (eco)
+    input  wire                  clk_50MHz,
+    input  wire                  reset,       // activo-bajo
+    input  wire                  rx,          // UART Rx
+    output wire                  tx,          // UART Tx (eco)
 
-    // LCD1602 interface
-    output wire               rs,
-    output wire               rw,
-    output wire               enable,
-    output wire [DATA_BITS-1:0] data_lcd,
+    // LCD1602 interface (fantasma)
+    output wire                  rs,
+    output wire                  rw,
+    output wire                  enable,
+    output wire [DATA_BITS-1:0]  data_lcd,
 
-    // FIFO status
-    output wire               fifo_full,
-    output wire               fifo_empty,
+    // FIFO flags
+    output wire                  fifo_full,
+    output wire                  fifo_empty,
 
-    
-    output wire [DATA_BITS-1:0] lat_deg_out
+    // debug: salida directa de la FIFO
+    output wire [DATA_BITS-1:0]  lat_deg_out
 );
 
-    // ---------------------- señales internas ----------------------
-    wire tick;                          // 16× baud
-    wire rx_done_tick;                  // byte recibido
-    wire [DATA_BITS-1:0] rx_data_out;   // dato del receptor UART
+    // ------------------------------------------------------------------------
+    // Internas
+    // ------------------------------------------------------------------------
+    wire                    tick;
+    wire                    phase_reset;
+    wire                    rx_done_tick;
+    wire [DATA_BITS-1:0]    rx_data_out, fifo_data_out;
+    wire                    tx_busy, tx_done_tick;
 
-    wire [DATA_BITS-1:0] fifo_data_out; // dato extraído del FIFO
-    wire tx_busy, tx_done_tick;
+    reg                     fifo_rd_en;
+    reg  [DATA_BITS-1:0]    tx_buffer;
+    reg                     tx_start;
+    reg  [1:0]              tx_state;
+    reg                     skip_first;
 
-    // se usa para arrancar la lectura y transmisión: eco única vez
-    wire tx_start = (~fifo_empty) && (~tx_busy);
+    localparam IDLE  = 2'd0,
+               RD    = 2'd1,
+               START = 2'd2,
+               WAIT  = 2'd3;
 
-    // -------------------- Baud-rate generator --------------------
+    // ------------------------------------------------------------------------
+    // Baud-rate generator con phase_reset
+    // ------------------------------------------------------------------------
     baud_rate_generator #(
         .N(BR_BITS),
         .M(BR_LIMIT)
-    ) BAUD_RATE_GEN (
-        .clk_50MHz(clk_50MHz),
-        .reset    (~reset),    // reset interno activo-alto
-        .tick     (tick)
+    ) BAUD_GEN (
+        .clk_50MHz   (clk_50MHz),
+        .reset       (~reset),
+        .phase_reset (phase_reset),
+        .tick        (tick)
     );
 
-    // ---------------------- UART Receiver ------------------------
+    // ------------------------------------------------------------------------
+    // UART Receiver
+    // ------------------------------------------------------------------------
     uart_receiver #(
         .DATA_BITS     (DATA_BITS),
         .STOP_BIT_TICK (STOP_BIT_TICK)
     ) UART_RX (
-        .clk_50MHz   (clk_50MHz),
-        .reset       (~reset),
-        .rx          (rx),
-        .sample_tick (tick),
-        .data_ready  (rx_done_tick),
-        .data_out    (rx_data_out)
+        .clk_50MHz    (clk_50MHz),
+        .reset        (~reset),
+        .rx           (rx),
+        .sample_tick  (tick),
+        .data_ready   (rx_done_tick),
+        .data_out     (rx_data_out),
+        .phase_reset  (phase_reset)
     );
 
-    // ------------------------- FIFO -------------------------------
+    // ------------------------------------------------------------------------
+    // FIFO síncrona
+    // ------------------------------------------------------------------------
     sync_fifo #(
-        .DWIDTH      (DATA_BITS),
-        .DEPTH       (FIFO_EXP)
+        .DWIDTH       (DATA_BITS),
+        .DEPTH        (FIFO_DEPTH)
     ) FIFO_INST (
-        .clk            (clk_50MHz),
-        .rstn           (reset),
-        .wr_en          (rx_done_tick),  // receptor escribe
-        .rd_en          (tx_start),      // lectura en el inicio de TX (eco)
-        .din            (rx_data_out),
-        .dout           (fifo_data_out),
-        .empty          (fifo_empty),
-        .full           (fifo_full)
+        .clk          (clk_50MHz),
+        .rstn         (reset),
+        .wr_en        (rx_done_tick),
+        .rd_en        (fifo_rd_en),
+        .din          (rx_data_out),
+        .dout         (fifo_data_out),
+        .full         (fifo_full),
+        .empty        (fifo_empty)
     );
 
-    // ---------------------- NMEA Parser --------------------------
-    wire [7:0] lat_deg, lat_min, lon_deg, lon_min;
-    wire valid_fix;
+    // ------------------------------------------------------------------------
+    // FSM para eco y skip_first
+    // ------------------------------------------------------------------------
+    always @(posedge clk_50MHz or negedge reset) begin
+        if (!reset) begin
+            tx_state   <= IDLE;
+            fifo_rd_en <= 1'b0;
+            tx_start   <= 1'b0;
+            tx_buffer  <= {DATA_BITS{1'b0}};
+            skip_first <= 1'b1;
+        end else begin
+            // por defecto
+            fifo_rd_en <= 1'b0;
+            tx_start   <= 1'b0;
 
-    nmea_parser PARSER (
-        .clk(clk_50MHz),
-        .rst(reset),
-        .rx_data(fifo_data_out),  // Conectar fifo_data_out a rx_data del parser
-        .rx_valid(~fifo_empty),      // Solo envía datos válidos
-        .lat_deg(lat_deg),
-        .lat_min(lat_min),
-        .lon_deg(lon_deg),
-        .lon_min(lon_min),
-        .state_o(),
-        .valid_fix(valid_fix)
-    );
+            case (tx_state)
+                IDLE: begin
+                    if (~fifo_empty && ~tx_busy) begin
+                        fifo_rd_en <= 1'b1;
+                        tx_state   <= RD;
+                    end
+                end
 
-    assign lat_deg_out = fifo_data_out;
+                RD: begin
+                    if (skip_first) begin
+                        // descartamos primer byte
+                        skip_first <= 1'b0;
+                        tx_state   <= IDLE;
+                    end else begin
+                        tx_buffer <= fifo_data_out;
+                        tx_state  <= START;
+                    end
+                end
 
-    // ---------------------- UART Transmitter ---------------------
+                START: begin
+                    tx_start <= 1'b1;
+                    tx_state <= WAIT;
+                end
+
+                WAIT: begin
+                    // cuando termine la trama...
+                    if (tx_done_tick) begin
+                        // si ya no hay más datos, preparamos a descartar el next first
+                        if (fifo_empty)
+                            skip_first <= 1'b1;
+                        tx_state <= IDLE;
+                    end
+                end
+            endcase
+        end
+    end
+
+    // ------------------------------------------------------------------------
+    // UART Transmitter (eco)
+    // ------------------------------------------------------------------------
     uart_transmitter #(
         .DATA_BITS     (DATA_BITS),
         .STOP_BIT_TICK (STOP_BIT_TICK)
@@ -100,39 +154,24 @@ module uart_top #(
         .clk_50MHz    (clk_50MHz),
         .reset        (~reset),
         .sample_tick  (tick),
-        .tx_start     (tx_start),        // arranca eco una vez
-        .data_in      (fifo_data_out),
+        .tx_start     (tx_start),
+        .data_in      (tx_buffer),
         .tx           (tx),
         .tx_busy      (tx_busy),
         .tx_done_tick (tx_done_tick)
     );
 
-    // ---------------------- LCD Display --------------------------
-    // Latch directo del receptor para display (no usa FIFO)
-    reg [DATA_BITS-1:0] latitud_reg;
-    always @(posedge clk_50MHz or negedge reset) begin
-        if (!reset)
-            latitud_reg <= {DATA_BITS{1'b0}};
-        else if (rx_done_tick)
-            latitud_reg <= rx_data_out;
-    end
+    // ------------------------------------------------------------------------
+    // Señales fantasma LCD/Parser
+    // ------------------------------------------------------------------------
+    assign rs       = 1'b0;
+    assign rw       = 1'b0;
+    assign enable   = 1'b0;
+    assign data_lcd = {DATA_BITS{1'b0}};
 
-    // Instanciación del controlador LCD
-    LCD1602_controller #(
-        .NUM_COMMANDS      (4),
-        .NUM_DATA_ALL      (32),
-        .NUM_DATA_PERLINE  (16),
-        .DATA_BITS         (DATA_BITS),
-        .COUNT_MAX         (800000)
-    ) lcd_inst (
-        .clk     (clk_50MHz),
-        .latitud (fifo_data_out),
-        .reset   (reset),
-        .ready_i (1'b1),
-        .rs      (rs),
-        .rw      (rw),
-        .enable  (enable),
-        .data    (data_lcd)
-    );
+    // ------------------------------------------------------------------------
+    // Debug
+    // ------------------------------------------------------------------------
+    assign lat_deg_out = fifo_data_out;
 
 endmodule

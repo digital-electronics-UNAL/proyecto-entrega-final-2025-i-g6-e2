@@ -142,22 +142,22 @@ always @(posedge clk_16ms) begin // este bloque define cuando se salta a idle co
                 case(flag_substate)
                     2'b00: begin
                         rs <= 1'b0;
-                        data <= 8'h80 + 8'h04;
+                        data <= 8'h80 + 8'h04;    // Posición: 1ª línea, columna 5
                         flag_substate <= 2'b01;
                     end
                     2'b01: begin
-						rs <= 1'b1;
-						data <= (latitud + 8'h30);
+                        rs <= 1'b1;
+                        data <= (latitud - latitud%100)/100 + 8'h30;   // Centenas → ASCII
                         flag_substate <= 2'b10;
                     end
                     2'b10: begin
-						rs <= 1'b1;
-                        data <= (latitud+ 8'h30);
-                        flag_substate <= 2'b00;
-                    end
-                    2'b11:begin
                         rs <= 1'b1;
-                        data <= latitud%10 + 8'h30;
+                        data <= (latitud%100 - latitud%10)/10 + 8'h30;  // Decenas → ASCII
+                        flag_substate <= 2'b11;
+                    end
+                    2'b11: begin
+                        rs <= 1'b1;
+                        data <= (latitud%10) + 8'h30;   // Unidades → ASCII
                         flag_substate <= 2'b00;
                     end
                 endcase

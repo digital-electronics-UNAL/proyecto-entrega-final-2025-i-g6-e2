@@ -1,18 +1,17 @@
 `timescale 1ns/1ps
 
-// Testbench for uart_lcd_tx
-// Sends ASCII "$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47\r\n," over RX,
-// monitors LCD and TX echo
+// Testbench for uart_top
+// Sends a simulated NMEA string over UART RX
+// Observes the TX line for echo
 
 `include "src/fpga/uart_top.v"
 `include "src/fpga/baud_rate_generator.v"
 `include "src/fpga/fifo.v"
 `include "src/fpga/uart_receiver/uart_receiver.v"
 `include "src/fpga/uart_transmitter/uart_transmitter.v"
-`include "src/fpga/lcd/lcd1602.v"
-`include "src/fpga/parser/nmea_parser.v"
 
 module uart_top_tb;
+
     // Clock & reset
     reg clk_50MHz = 0;
     always #10 clk_50MHz = ~clk_50MHz;  // 50 MHz
@@ -29,8 +28,6 @@ module uart_top_tb;
 
     // DUT signals
     wire tx;
-    wire rs, rw, enable;
-    wire [7:0] data_lcd;
     wire fifo_full, fifo_empty;
 
     // Instantiate DUT
@@ -41,127 +38,53 @@ module uart_top_tb;
         .BR_BITS       (9),
         .FIFO_EXP      (4)
     ) DUT (
-        .clk_50MHz(clk_50MHz),
-        .reset    (reset_n),
-        .rx       (rx),
-        .tx       (tx),
-        .rs       (rs),
-        .rw       (rw),
-        .enable   (enable),
-        .data_lcd (data_lcd),
-        .fifo_full (fifo_full),
-        .fifo_empty(fifo_empty)
+        .clk_50MHz   (clk_50MHz),
+        .reset       (reset_n),
+        .rx          (rx),
+        .tx          (tx),
+        .fifo_full   (fifo_full),
+        .fifo_empty  (fifo_empty)
     );
 
-    // Baud period for 9600 baud: ~104166 ns
+    // Baud period for 9600 baud = 1 / 9600 ≈ 104166 ns
     localparam integer BAUD_PERIOD = 104166;
 
     // Task: send one byte via UART 8N1 LSB-first
     task uart_send_byte(input [7:0] data);
         integer i;
         begin
-            // Start bit
-            rx = 1'b0;
+            rx = 1'b0;  // start bit
             #(BAUD_PERIOD);
-            // Data bits LSB first
             for (i = 0; i < 8; i = i + 1) begin
                 rx = data[i];
                 #(BAUD_PERIOD);
             end
-            // Stop bit
-            rx = 1'b1;
+            rx = 1'b1;  // stop bit
             #(BAUD_PERIOD);
         end
     endtask
 
     // Stimulus
     initial begin
-        // Wait for reset deassertion
         @(posedge reset_n);
-        // Give some margin
-        #500_000;
+        #500_000; // Espera a que el sistema se estabilice
 
-        // Send "$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47\r\n"
         uart_send_string;
 
-        // Wait for LCD update and TX echoes
         #200_000_000;
 
         $display("--- Simulation complete ---");
         $finish;
     end
 
-    // Task to send the entire string byte by byte
+    // Task: send entire string
     task uart_send_string;
+        reg [8*64-1:0] msg;
+        integer i;
         begin
-            uart_send_byte("$");
-            uart_send_byte("G");
-            uart_send_byte("P");
-            uart_send_byte("R");
-            uart_send_byte("M");
-            uart_send_byte("C");
-            uart_send_byte(",");
-            uart_send_byte("0");
-            uart_send_byte("5");
-            uart_send_byte("2");
-            uart_send_byte("4");
-            uart_send_byte("3");
-            uart_send_byte("7");
-            uart_send_byte(".");
-            uart_send_byte("0");
-            uart_send_byte("0");
-            uart_send_byte(",");
-            uart_send_byte("A");
-            uart_send_byte(",");
-            uart_send_byte("0");
-            uart_send_byte("4");
-            uart_send_byte("3");
-            uart_send_byte("8");
-            uart_send_byte(".");
-            uart_send_byte("2");
-            uart_send_byte("1");
-            uart_send_byte("0");
-            uart_send_byte("0");
-            uart_send_byte("9");
-            uart_send_byte(",");
-            uart_send_byte("N");
-            uart_send_byte(",");
-            uart_send_byte("0");
-            uart_send_byte("7");
-            uart_send_byte("4");
-            uart_send_byte("0");
-            uart_send_byte("5");
-            uart_send_byte(".");
-            uart_send_byte("4");
-            uart_send_byte("8");
-            uart_send_byte("8");
-            uart_send_byte("4");
-            uart_send_byte("1");
-            uart_send_byte(",");
-            uart_send_byte("W");
-            uart_send_byte(",");
-            uart_send_byte("1");
-            uart_send_byte(".");
-            uart_send_byte("6");
-            uart_send_byte("2");
-            uart_send_byte("2");
-            uart_send_byte(",");
-            uart_send_byte(",");
-            uart_send_byte("2");
-            uart_send_byte("4");
-            uart_send_byte("0");
-            uart_send_byte("7");
-            uart_send_byte("2");
-            uart_send_byte("5");
-            uart_send_byte(",");
-            uart_send_byte(",");
-            uart_send_byte(",");
-            uart_send_byte("A");
-            uart_send_byte("*");
-            uart_send_byte("6");
-            uart_send_byte("6");
-            uart_send_byte("\r");
-            uart_send_byte("\n");
+            msg = "$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47\r\n";
+            for (i = 0; i < 64 && msg[8*63 - i*8 +: 8] != 8'd0; i = i + 1)
+                uart_send_byte(msg[8*63 - i*8 +: 8]);
         end
     endtask
 
