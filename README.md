@@ -1,5 +1,9 @@
 # SpaceLoRa
 
+### Integrantes:
+* Sergio Andrés Bolaños Penagos
+* Johan Camilo Patiño Mogollón
+
 ## 1. Qué hace el proyecto
 
 SpaceLoRa es un **sistema IoT de localización geográfica** completamente abierto y de bajo costo, implementado sobre una FPGA Cyclone IV. Captura sentencias GPS en formato NMEA 0183, las procesa en hardware para extraer latitud y longitud, y transmite estos datos vía radio de largo alcance usando LoRa (Para este caso SX1276 + ESP32). El prototipo incluye un nodo transmisor (FPGA + ESP32-LoRa) y un nodo receptor para monitoreo remoto en tiempo real, además de la FPGA como cabeza central.
@@ -44,3 +48,10 @@ Para replicar el comportamiento de este repositorio se debe
 
 
 Para más información respecto al proyecto, abrir el archivo "informe_final_proyecto_digital.pdf" que se encuentra en la carpeta src/ del proyecto.
+
+## 6. Simulaciones 
+
+A continuación se muestra una simulación general de la aplicación, que fue generada con el testbench que se encuentra en este mismo repositorio.
+En la simulación se reciben datos por el uart_rx, los cuales va almacenando hasta completar un byte a partir de estados en una máquina de estados que después se añaden a la fifo, y el transmisor toma los datos de la fifo cuando hay alguno dentro de ella y los manda de igual forma.
+
+<img src="./images/simulacion.png" alt="Simulacion testbench general" />
