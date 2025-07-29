@@ -55,3 +55,18 @@ A continuación se muestra una simulación general de la aplicación, que fue ge
 En la simulación se reciben datos por el uart_rx, los cuales va almacenando hasta completar un byte a partir de estados en una máquina de estados que después se añaden a la fifo, y el transmisor toma los datos de la fifo cuando hay alguno dentro de ella y los manda de igual forma.
 
 <img src="./images/simulacion.png" alt="Simulacion testbench general" />
+
+## 7. Módulos en Quartus
+
+### Vista general:
+<img src="./images/general.png" alt="Simulacion testbench general" />
+
+### Baud rate generator
+<img src="./images/baud_rate_generator.png" alt="Simulacion testbench general" />
+
+### UART receiver
+<img src="./images/uart_receiver.png" alt="Simulacion testbench general" />
+
+### UART transmitter
+<img src="./images/uart_transmitter.png" alt="Simulacion testbench general" />
+
