@@ -6,7 +6,7 @@
 
 ## 1. Qué hace el proyecto
 
-SpaceLoRa es un **sistema IoT de localización geográfica** completamente abierto y de bajo costo, implementado sobre una FPGA Cyclone IV. Captura sentencias GPS en formato NMEA 0183, las procesa en hardware para extraer latitud y longitud, y transmite estos datos vía radio de largo alcance usando LoRa (Para este caso SX1276 + ESP32). El prototipo incluye un nodo transmisor (FPGA + ESP32-LoRa) y un nodo receptor para monitoreo remoto en tiempo real, además de la FPGA como cabeza central.
+SpaceLoRa es un **sistema IoT de localización geográfica** completamente abierto y de bajo costo, implementado sobre una FPGA Cyclone IV. Captura sentencias GPS en formato NMEA 0183, las procesa en hardware para extraer latitud y longitud, y transmite estos datos vía radio de largo alcance usando LoRa (Para este caso SX1276 + ESP32). El prototipo incluye un nodo transmisor (FPGA + ESP32-LoRa) y un nodo receptor para monitoreo remoto en tiempo real, además de la FPGA como cabeza central donde toos los datos de posicion son obtenidos del modulo GPS NEO-6MV2 .
 
 ## 2. Justificación
 
@@ -35,9 +35,14 @@ SpaceLoRa es un **sistema IoT de localización geográfica** completamente abier
    - Recibe datos de la FPGA y los transmite mediante LoRa (433 MHz) a un nodo remoto.
 
 ## 4. Pruebas
+Para concer la precision y exactitud de nuestros dispositivos dispositivos en especial nuestro modulos TTGO ESP32 LoRA y GPS NEO-6MV2  se emplearon algunas pruebas de campo para conocer los datos que arroga nuestro modulo GPS y la distancia que se puede mantener una comunicacion estaable entre las TTGO ESP32 LoRa.
+### 4.1 ESP32
+- **Prueba cercana**: Se conectaron todos los componentes del sistema, realizando una prueba a menos de 5m para comprobar la potencia de la señal, la cual supera por más de 10-12 veces al ruido.
+- **Prueba lejana**: Se realizó una prueba con dos módulos TTGO LoRa32 conectándose a más de 1km, dando resultados satisfactorios siempre que se encuentra en visión directa las dos antenas, es decir, sin obstáculos de por medio. Además, incluso en situaciones donde el ruido supera la señal se sigue recibiendo los datos.
 
-- **Prueba cercana**: se conectaron todos los componentes del sistema, realizando una prueba a menos de 5m para comprobar la potencia de la señal, la cual supera por más de 10-12 veces al ruido.
-- **Prueba lejana**: se realizó una prueba con dos módulos TTGO LoRa32 conectándose a más de 1km, dando resultados satisfactorios siempre que se encuentra en visión directa las dos antenas, es decir, sin obstáculos de por medio. Además, incluso en situaciones donde el ruido supera la señal se sigue recibiendo los datos.  
+### 4.2 GPS NEO-6MV2 
+
+- **Prueba de datos**: Para el modulo GPS se hizo la misma prueba de testeo pero repetidamente, donde se buscaba conocer la precision del dispositivo pues debidoe al desarrollo del proyecto solo se usaban dos numeros de decimales, esto genera un gran desfase de posicion real vs posicion obtenida con el GPS. A pesar del error se considera que entra de un margen aceptable siendo casi de un desfase de 200-300 metros.
 
 ## 5. Replicar
 
@@ -69,4 +74,13 @@ En la simulación se reciben datos por el uart_rx, los cuales va almacenando has
 
 ### UART transmitter
 <img src="./images/uart_transmitter.png" alt="Simulacion testbench general" />
+
+
+## 7. Mejoras a futuro
+Se sugieren las siguientes recomendaciones
+
+1. Como forma principal se recomienda siempre hacer la verificación de cada modulo si es realmente lo que quieren que haga, pues durante el desarrollo del proyecto se realizaron cambios en los módulos debido a que se presentaban incompatibilidades o simplemente la tarea que se buscaba ya no la cumplía correctamente.
+2. Mejorar y optimizar mejor los módulos para que no presenten fallos y tengan mas robustez al cambio de código, principalmente para los módulos que componen la FIFO y el NMEA-PARSER.
+3. Con el avance o mejoras que se desee hacer con el proyecto, realizar sus respectivas pruebas tanto en simulaciones como en la implementación física para garantizar así un avance optimo.
+
 
